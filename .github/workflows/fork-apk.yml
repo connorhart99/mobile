@@ -31,7 +31,7 @@ jobs:
       - name: Code generation
         run: dart run build_runner build
 
-      - run: flutter build apk --debug
+      - run: flutter build apk --debug --dart-define=LICHESS_HOST=lichess.org --dart-define=LICHESS_WS_HOST=socket.lichess.org
 
       - name: Upload debug APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

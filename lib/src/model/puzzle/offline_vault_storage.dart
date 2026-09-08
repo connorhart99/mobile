@@ -1,7 +1,9 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/db/database.dart';
+import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
+import 'package:lichess_mobile/src/model/puzzle/offline_vault_prefs.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// A provider for [OfflineVaultStorage].
@@ -9,6 +11,20 @@ final offlineVaultStorageProvider = FutureProvider<OfflineVaultStorage>((Ref ref
   final database = await ref.watch(databaseProvider.future);
   return OfflineVaultStorage(database, ref);
 }, name: 'OfflineVaultStorageProvider');
+
+/// Kept/solved counts for the current user plus the active row goal.
+typedef OfflineVaultStats = ({int target, int kept, int done});
+
+final offlineVaultStatsProvider = FutureProvider.autoDispose<OfflineVaultStats>((Ref ref) async {
+  final prefs = ref.watch(offlineVaultPrefsProvider);
+  final userId = ref.watch(authControllerProvider)?.user.id;
+  final storage = await ref.watch(offlineVaultStorageProvider.future);
+  final results = await Future.wait([
+    storage.countKept(userId: userId),
+    storage.countDone(userId: userId),
+  ]);
+  return (target: prefs.targetCount, kept: results[0], done: results[1]);
+}, name: 'OfflineVaultStatsProvider');
 
 const _anonUserKey = '**anon**';
 

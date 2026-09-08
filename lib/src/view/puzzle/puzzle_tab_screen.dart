@@ -22,7 +22,7 @@ import 'package:lichess_mobile/src/utils/screen.dart';
 import 'package:lichess_mobile/src/utils/string.dart';
 import 'package:lichess_mobile/src/view/account/account_menu.dart';
 import 'package:lichess_mobile/src/view/puzzle/dashboard_screen.dart';
-import 'package:lichess_mobile/src/view/puzzle/offline_vault_picker.dart';
+import 'package:lichess_mobile/src/view/puzzle/offline_vault_screen.dart';
 import 'package:lichess_mobile/src/view/puzzle/puzzle_history_screen.dart';
 import 'package:lichess_mobile/src/view/puzzle/puzzle_screen.dart';
 import 'package:lichess_mobile/src/view/puzzle/puzzle_themes_screen.dart';
@@ -321,7 +321,7 @@ class _PuzzleMenu extends ConsumerWidget {
           icon: Icons.download_for_offline_outlined,
           title: 'Offline vault',
           subtitle: 'Keep ${offlineVaultLabel(vaultPrefs)} on this phone.',
-          onTap: () => showOfflineVaultPicker(context, ref),
+          onTap: () => Navigator.of(context).push(OfflineVaultScreen.buildRoute()),
         ),
         if (authUser != null) ...[
           _PuzzleMenuListTile(

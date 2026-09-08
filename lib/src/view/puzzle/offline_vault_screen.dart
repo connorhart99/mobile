@@ -1,12 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_prefs.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_storage.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
-import 'package:lichess_mobile/src/widgets/adaptive_choice_picker.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
 import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
-import 'package:lichess_mobile/src/widgets/settings.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Human label for the current vault goal. Hardcoded English until stable.
@@ -54,36 +53,6 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
     return _mode != prefs.mode || _count != prefs.countTarget || _mb != prefs.mbTarget;
   }
 
-  Future<void> _pickSize() async {
-    if (_mode == OfflineVaultMode.count) {
-      const choices = [100, 500, 1000, 5000, 20000, 100000];
-      int sel = _count;
-      await showChoicePicker(
-        context,
-        choices: choices,
-        selectedItem: choices.contains(sel) ? sel : 1000,
-        labelBuilder: (t) => Text(t.toString()),
-        onSelectedItemChanged: (int? n) {
-          if (n != null) sel = n;
-        },
-      );
-      if (mounted) setState(() => _count = sel);
-    } else if (_mode == OfflineVaultMode.mb) {
-      const choices = [10, 50, 100, 250, 500, 1000];
-      int sel = _mb;
-      await showChoicePicker(
-        context,
-        choices: choices,
-        selectedItem: choices.contains(sel) ? sel : 50,
-        labelBuilder: (t) => Text('$t MB'),
-        onSelectedItemChanged: (int? n) {
-          if (n != null) sel = n;
-        },
-      );
-      if (mounted) setState(() => _mb = sel);
-    }
-  }
-
   Future<void> _save() async {
     setState(() => _saving = true);
     final notifier = ref.read(offlineVaultPrefsProvider.notifier);
@@ -102,8 +71,9 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
   }
 
   Future<void> _wipe() async {
+    final userId = ref.read(authControllerProvider)?.user.id;
     final storage = await ref.read(offlineVaultStorageProvider.future);
-    await storage.wipe(userId: null, angle: 'mix');
+    await storage.wipe(userId: userId);
     ref.invalidate(offlineVaultStatsProvider);
     if (!mounted) return;
     showSnackBar(context, 'Stored vault puzzles deleted.');
@@ -112,7 +82,6 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
   @override
   Widget build(BuildContext context) {
     final stats = ref.watch(offlineVaultStatsProvider);
-    final draft = OfflineVaultPrefs(mode: _mode, mbTarget: _mb, countTarget: _count);
 
     return PlatformScaffold(
       appBar: PlatformAppBar(title: const Text('Offline vault')),
@@ -121,37 +90,33 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
           ListSection(
             header: const Text('Goal'),
             footer: const Text(
-              'One choice at a time. Nothing changes until you tap Save. Download and play land in the next update.',
+              'One choice at a time. Sizes open inline. Nothing changes until you tap Save. Download and play land in the next update.',
             ),
             children: [
               RadioGroup<OfflineVaultMode>(
                 groupValue: _mode,
                 onChanged: (m) => setState(() => _mode = m ?? _mode),
-                child: const Column(
+                child: Column(
                   children: [
-                    RadioListTile<OfflineVaultMode>(
+                    const RadioListTile<OfflineVaultMode>(
                       title: Text('Puzzle count'),
                       subtitle: Text('Keep an exact number of puzzles.'),
                       value: OfflineVaultMode.count,
                     ),
-                    RadioListTile<OfflineVaultMode>(
+                    if (_mode == OfflineVaultMode.count) _InlineSizeChoices(_countOptions, _count, (n) => setState(() => _count = n)),
+                    const RadioListTile<OfflineVaultMode>(
                       title: Text('Storage size'),
                       subtitle: Text('Fill up to a size in MB.'),
                       value: OfflineVaultMode.mb,
                     ),
-                    RadioListTile<OfflineVaultMode>(
+                    if (_mode == OfflineVaultMode.mb) _InlineSizeChoices(_mbOptions, _mb, (n) => setState(() => _mb = n), suffix: ' MB'),
+                    const RadioListTile<OfflineVaultMode>(
                       title: Text('Everything'),
                       subtitle: Text('Keep the whole set. Needs lots of space and Wi-Fi.'),
                       value: OfflineVaultMode.all,
                     ),
                   ],
                 ),
-              ),
-              SettingsListTile(
-                settingsLabel: const Text('Size'),
-                settingsValue: offlineVaultLabel(draft),
-                enabled: _mode != OfflineVaultMode.all,
-                onTap: _mode == OfflineVaultMode.all ? null : _pickSize,
               ),
             ],
           ),
@@ -185,6 +150,38 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+const _countOptions = [100, 500, 1000, 5000, 20000, 100000];
+const _mbOptions = [10, 50, 100, 250, 500, 1000];
+
+/// Inline size choices shown under the selected goal.
+/// A widget class (not a helper function) per project style rules.
+class _InlineSizeChoices extends StatelessWidget {
+  const _InlineSizeChoices(this.options, this.selected, this.onPick, {this.suffix = ''});
+
+  final List<int> options;
+  final int selected;
+  final void Function(int) onPick;
+  final String suffix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(56.0, 0, 16.0, 8.0),
+      child: Wrap(
+        spacing: 8.0,
+        children: [
+          for (final n in options)
+            ChoiceChip(
+              label: Text('$n$suffix'),
+              selected: n == selected,
+              onSelected: (_) => onPick(n),
+            ),
         ],
       ),
     );

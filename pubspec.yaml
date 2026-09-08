@@ -54,6 +54,7 @@ dependencies:
   intl: ^0.20.3
   json_annotation: ^4.12.0
   l10n_esperanto: ^3.0.0
+  libcompress: ^1.2.1
   # Git ref: the branch that gave lc0 private I/O and a handle API is not merged nor published
   # yet. See engine_refactor.md §13.
   lc0:

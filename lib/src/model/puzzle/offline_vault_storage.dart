@@ -1,9 +1,11 @@
 import 'package:collection/collection.dart';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lichess_mobile/src/db/database.dart';
 import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/common/id.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_prefs.dart';
+import 'package:lichess_mobile/src/model/puzzle/puzzle.dart';
 import 'package:sqflite/sqflite.dart';
 
 /// A provider for [OfflineVaultStorage].
@@ -155,4 +157,41 @@ DELETE FROM offline_puzzles WHERE rowid IN (
     );
     if (_ref.mounted) _ref.invalidateSelf();
   }
+
+  /// Next unsolved vault puzzle as [LitePuzzle], or null when empty.
+  Future<LitePuzzle?> fetchNextLite({required UserId? userId, String angle = 'mix'}) async {
+    final row = await fetchNext(userId: userId, angle: angle);
+    return row != null ? liteFromRow(row) : null;
+  }
+
+  /// Insert lite puzzles, skip ids already stored.
+  Future<void> insertLiteBatch({
+    required UserId? userId,
+    required Iterable<LitePuzzle> puzzles,
+    required Map<PuzzleId, ISet<String>> themesById,
+    String angle = 'mix',
+  }) async {
+    final rows = puzzles
+        .map(
+          (p) => {
+            'puzzleId': p.id.value,
+            'rating': p.rating,
+            'themes': themesById[p.id]?.join(' ') ?? '',
+            'fen': p.fen,
+            'moves': p.solution.join(' '),
+          },
+        )
+        .toList();
+    await insertBatch(userId: userId, rows: rows, angle: angle);
+  }
+}
+
+/// Rebuilds a [LitePuzzle] from a vault row.
+LitePuzzle liteFromRow(Map<String, Object?> row) {
+  return LitePuzzle(
+    id: PuzzleId((row['puzzleId'] as String?) ?? ''),
+    fen: (row['fen'] as String?) ?? '',
+    solution: ((row['moves'] as String?) ?? '').split(' ').where((m) => m.isNotEmpty).toIList(),
+    rating: (row['rating'] as num?)?.toInt() ?? 0,
+  );
 }

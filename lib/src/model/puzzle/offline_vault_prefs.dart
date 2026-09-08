@@ -38,7 +38,11 @@ class OfflineVaultPrefs implements Serializable {
   }
 
   @override
-  Map<String, dynamic> toJson() => {'mode': mode.name, 'mbTarget': mbTarget, 'countTarget': countTarget};
+  Map<String, dynamic> toJson() => {
+    'mode': mode.name,
+    'mbTarget': mbTarget,
+    'countTarget': countTarget,
+  };
 
   /// Row goal for [mode]. `all` = no cap (caller must gate WiFi/power).
   /// `mb` maps via guess; UI shows real kept MB after fill.
@@ -83,10 +87,7 @@ class OfflineVaultPrefsNotifier extends Notifier<OfflineVaultPrefs>
   @override
   OfflineVaultPrefs build() {
     final p = fetch();
-    final fixedCount = p.countTarget.clamp(
-      OfflineVaultPrefs.kMinCount,
-      6000000,
-    );
+    final fixedCount = p.countTarget.clamp(OfflineVaultPrefs.kMinCount, 6000000);
     final fixedMb = p.mbTarget.clamp(0, OfflineVaultPrefs.kMaxMb);
     return (fixedCount == p.countTarget && fixedMb == p.mbTarget)
         ? p

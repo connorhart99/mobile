@@ -317,13 +317,12 @@ class _PuzzleMenu extends ConsumerWidget {
                 }
               : null,
         ),
-        if (authUser != null)
-          _PuzzleMenuListTile(
-            icon: Icons.download_for_offline_outlined,
-            title: 'Offline vault',
-            subtitle: 'Keep ${offlineVaultLabel(vaultPrefs)} on this phone.',
-            onTap: () => showOfflineVaultPicker(context, ref),
-          ),
+        _PuzzleMenuListTile(
+          icon: Icons.download_for_offline_outlined,
+          title: 'Offline vault',
+          subtitle: 'Keep ${offlineVaultLabel(vaultPrefs)} on this phone.',
+          onTap: () => showOfflineVaultPicker(context, ref),
+        ),
         if (authUser != null) ...[
           _PuzzleMenuListTile(
             icon: Icons.assessment_outlined,

@@ -74,6 +74,7 @@ final offlineVaultFillerProvider = NotifierProvider<OfflineVaultFiller, VaultFil
 class OfflineVaultFiller extends Notifier<VaultFillState> {
   final Logger _log = Logger('OfflineVaultFiller');
   bool _stop = false;
+  int _autoSyncedFor = -1;
 
   @override
   VaultFillState build() => const VaultFillState();
@@ -179,6 +180,19 @@ class OfflineVaultFiller extends Notifier<VaultFillState> {
     } finally {
       state = state.copyWith(running: false, phase: '');
     }
+  }
+
+  /// Syncs solved rows on its own when online and signed in.
+  /// No-op logged out, offline, busy, or with nothing new. Safe to call often.
+  Future<void> autoSyncIfNeeded({required bool isOnline}) async {
+    if (state.running || !isOnline) return;
+    final userId = ref.read(authControllerProvider)?.user.id;
+    if (userId == null) return;
+    final storage = await ref.read(offlineVaultStorageProvider.future);
+    final done = await storage.countDone(userId: userId);
+    if (done == 0 || done == _autoSyncedFor) return;
+    _autoSyncedFor = done;
+    await sync();
   }
 
   /// Pushes solved vault rows when signed in, drops them, tops up.

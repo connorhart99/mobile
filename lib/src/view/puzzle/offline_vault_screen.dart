@@ -3,10 +3,10 @@ import 'package:lichess_mobile/src/model/auth/auth_controller.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_filler.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_prefs.dart';
 import 'package:lichess_mobile/src/model/puzzle/offline_vault_storage.dart';
+import 'package:lichess_mobile/src/network/connectivity.dart';
 import 'package:lichess_mobile/src/utils/navigation.dart';
 import 'package:lichess_mobile/src/view/puzzle/vault_session_screen.dart';
 import 'package:lichess_mobile/src/widgets/feedback.dart';
-import 'package:lichess_mobile/src/widgets/list.dart';
 import 'package:lichess_mobile/src/widgets/platform.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -19,11 +19,10 @@ String offlineVaultLabel(OfflineVaultPrefs prefs) {
   };
 }
 
-/// Full settings screen for the offline vault.
+/// Vault settings on one screen, no scroll.
 ///
-/// One mode active at a time (count, MB target, or all). Nothing is stored
-/// until Save is tapped; the app bar always goes back without saving.
-/// Built only from shared app widgets.
+/// Goal radios open their sizes inline. Nothing is stored until Save.
+/// Solved rows sync on their own when online and signed in.
 class OfflineVaultScreen extends ConsumerStatefulWidget {
   const OfflineVaultScreen({super.key});
 
@@ -48,6 +47,12 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
     _mode = prefs.mode;
     _count = prefs.countTarget;
     _mb = prefs.mbTarget == 0 ? 50 : prefs.mbTarget;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(offlineVaultFillerProvider.notifier)
+          .autoSyncIfNeeded(isOnline: ref.read(isDeviceOnlineProvider));
+    });
   }
 
   bool get _dirty {
@@ -86,111 +91,122 @@ class _OfflineVaultScreenState extends ConsumerState<OfflineVaultScreen> {
     final stats = ref.watch(offlineVaultStatsProvider);
     final fill = ref.watch(offlineVaultFillerProvider);
     final kept = stats.value?.kept ?? 0;
+    final done = stats.value?.done ?? 0;
+    final target = stats.value?.target ?? 0;
 
     return PlatformScaffold(
-      appBar: PlatformAppBar(title: const Text('Offline vault')),
-      body: ListView(
-        children: [
-          ListSection(
-            header: const Text('Goal'),
-            footer: const Text(
-              'One choice at a time. Sizes open inline. Nothing changes until you tap Save.',
-            ),
-            children: [
-              RadioGroup<OfflineVaultMode>(
-                groupValue: _mode,
-                onChanged: (m) => setState(() => _mode = m ?? _mode),
-                child: Column(
-                  children: [
-                    const RadioListTile<OfflineVaultMode>(
-                      title: Text('Puzzle count'),
-                      subtitle: Text('Keep an exact number of puzzles.'),
-                      value: OfflineVaultMode.count,
-                    ),
-                    if (_mode == OfflineVaultMode.count)
-                      _InlineSizeChoices(_countOptions, _count, (n) => setState(() => _count = n)),
-                    const RadioListTile<OfflineVaultMode>(
-                      title: Text('Storage size'),
-                      subtitle: Text('Fill up to a size in MB.'),
-                      value: OfflineVaultMode.mb,
-                    ),
-                    if (_mode == OfflineVaultMode.mb)
-                      _InlineSizeChoices(
-                        _mbOptions,
-                        _mb,
-                        (n) => setState(() => _mb = n),
-                        suffix: ' MB',
-                      ),
-                    const RadioListTile<OfflineVaultMode>(
-                      title: Text('Everything'),
-                      subtitle: Text('Keep the whole set. Needs lots of space and Wi-Fi.'),
-                      value: OfflineVaultMode.all,
-                    ),
-                  ],
-                ),
-              ),
+      appBar: PlatformAppBar(
+        title: const Text('Offline vault'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'wipe') _wipe();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'wipe', child: Text('Delete stored puzzles')),
             ],
-          ),
-          ListSection(
-            header: const Text('On this phone'),
-            children: [
-              if (fill.running) _FillProgress(fill: fill),
-              if (fill.error.isNotEmpty)
-                ListTile(title: const Text('Last message'), subtitle: Text(fill.error)),
-              stats.when(
-                data: (s) => Column(
-                  children: [
-                    ListTile(title: const Text('Goal'), trailing: Text('${s.target}')),
-                    ListTile(title: const Text('Stored'), trailing: Text('${s.kept}')),
-                    ListTile(title: const Text('Solved'), trailing: Text('${s.done}')),
-                  ],
-                ),
-                loading: () => const ListTile(title: Text('Stored'), trailing: Text('…')),
-                error: (_, _) => const ListTile(title: Text('Stored'), trailing: Text('?')),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton(
-                  onPressed: _dirty && !_saving ? _save : null,
-                  child: Text(_saving ? 'Saving…' : 'Save'),
-                ),
-                const SizedBox(height: 8),
-                FilledButton.tonal(
-                  onPressed: kept > 0 && !fill.running
-                      ? () => Navigator.of(context).push(OfflineVaultSessionScreen.buildRoute())
-                      : null,
-                  child: const Text('Play offline'),
-                ),
-                const SizedBox(height: 8),
-                if (fill.running)
-                  OutlinedButton(
-                    onPressed: () => ref.read(offlineVaultFillerProvider.notifier).stop(),
-                    child: const Text('Stop'),
-                  )
-                else
-                  OutlinedButton(
-                    onPressed: () => ref.read(offlineVaultFillerProvider.notifier).start(),
-                    child: const Text('Download now'),
-                  ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: fill.running
-                      ? null
-                      : () => ref.read(offlineVaultFillerProvider.notifier).sync(),
-                  child: const Text('Sync solved'),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(onPressed: _wipe, child: const Text('Delete stored puzzles')),
-              ],
-            ),
           ),
         ],
       ),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            RadioGroup<OfflineVaultMode>(
+              groupValue: _mode,
+              onChanged: (m) => setState(() => _mode = m ?? _mode),
+              child: Column(
+                mainAxisSize: .min,
+                children: [
+                  const RadioListTile<OfflineVaultMode>(
+                    dense: true,
+                    title: Text('Puzzle count'),
+                    value: OfflineVaultMode.count,
+                  ),
+                  if (_mode == OfflineVaultMode.count)
+                    _InlineSizeChoices(_countOptions, _count, (n) => setState(() => _count = n)),
+                  const RadioListTile<OfflineVaultMode>(
+                    dense: true,
+                    title: Text('Storage size'),
+                    value: OfflineVaultMode.mb,
+                  ),
+                  if (_mode == OfflineVaultMode.mb)
+                    _InlineSizeChoices(
+                      _mbOptions,
+                      _mb,
+                      (n) => setState(() => _mb = n),
+                      suffix: ' MB',
+                    ),
+                  const RadioListTile<OfflineVaultMode>(
+                    dense: true,
+                    title: Text('Everything'),
+                    value: OfflineVaultMode.all,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: .spaceAround,
+              children: [
+                _Stat(label: 'Goal', value: '$target'),
+                _Stat(label: 'Stored', value: '$kept'),
+                _Stat(label: 'Solved', value: '$done'),
+              ],
+            ),
+            if (fill.running) ...[
+              const SizedBox(height: 4),
+              _FillProgress(fill: fill),
+            ] else if (fill.error.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(fill.error, style: const TextStyle(fontSize: 12)),
+            ],
+            const Spacer(),
+            FilledButton(
+              onPressed: _dirty && !_saving ? _save : null,
+              child: Text(_saving ? 'Saving…' : 'Save'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.tonal(
+              onPressed: kept > 0 && !fill.running
+                  ? () => Navigator.of(context).push(OfflineVaultSessionScreen.buildRoute())
+                  : null,
+              child: const Text('Play offline'),
+            ),
+            const SizedBox(height: 8),
+            if (fill.running)
+              OutlinedButton(
+                onPressed: () => ref.read(offlineVaultFillerProvider.notifier).stop(),
+                child: const Text('Stop download'),
+              )
+            else
+              OutlinedButton(
+                onPressed: () => ref.read(offlineVaultFillerProvider.notifier).start(),
+                child: const Text('Download now'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One compact Goal/Stored/Solved cell.
+class _Stat extends StatelessWidget {
+  const _Stat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: .min,
+      children: [
+        Text(value, style: const TextStyle(fontSize: 20, fontWeight: .w600)),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
     );
   }
 }
@@ -218,16 +234,13 @@ class _FillProgress extends StatelessWidget {
         : fill.target > 0
         ? fill.progress
         : null;
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(value: value),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: .start,
+      mainAxisSize: .min,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12)),
+        LinearProgressIndicator(value: value),
+      ],
     );
   }
 }
@@ -248,9 +261,10 @@ class _InlineSizeChoices extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(56.0, 0, 16.0, 8.0),
+      padding: const EdgeInsets.fromLTRB(52.0, 0, 8.0, 4.0),
       child: Wrap(
-        spacing: 8.0,
+        spacing: 6.0,
+        runSpacing: 2.0,
         children: [
           for (final n in options)
             ChoiceChip(
